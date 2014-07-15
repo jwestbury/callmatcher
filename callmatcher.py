@@ -78,7 +78,6 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
 
     for rec in recordings:
         callLog = {}
-        unableToFind = 0
         cursor = conn.cursor()
         print "Selecting records that match '%s' and '%s'" % (rec.sourcenumber, rec.destnumber)
         cursor.execute("SELECT * FROM PhoneLog WHERE CallerNumber=\'%s\' and DialedNumber=\'%s\'" % (rec.sourcenumber, rec.destnumber))
@@ -86,7 +85,6 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
         while 1:
             row = cursor.fetchone()
             if not row:
-                unableToFind = 1
                 break
             else:
                 td = parser.parse(row.Time)
