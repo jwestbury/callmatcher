@@ -49,6 +49,9 @@ coverage.xml
 *.log
 *.pot
 
+# Boto stuff:
+.boto
+
 # Sphinx documentation
 docs/_build/
 
@@ -65,7 +68,8 @@ docs/_build/
 .LSOverride
 
 # Icon must ends with two \r.
-Icon
+Icon
+
 
 # Thumbnails
 ._*
