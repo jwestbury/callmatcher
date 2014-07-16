@@ -4,6 +4,7 @@ import os
 import argparse
 import dateutil
 from shutil import copyfile
+from os import remove
 from dateutil import parser
 from operator import attrgetter
 
@@ -54,7 +55,7 @@ def parseRecordingData(recordingTempDirectory = None):
         print "Unknown error accessing recording directory '%s'. Quitting." % recordingTempDirectory
         exit(4)
 
-def matchCalls(authType = "windows", server = None, database = None, username = None, password = None, days = 7,
+def matchCalls(authType = "windows", server = None, database = None, username = None, password = None,
     recordingTempDirectory = None, destinationDirectory = None, recordings = None):
     """Gets data from call log stored in SQL Server, matches to recordings, and copies files.
 
@@ -95,6 +96,10 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
             matched = min(callLog, key=lambda y:abs((callLog[y]-rec.time).total_seconds()))
             print "Matched call is call ID %s at %s." % (matched, rec.time)
             copyfile(recordingTempDirectory+"/"+rec.filename, destinationDirectory+"/"+matched+".WAV")
+            try:
+                remove("%s/%s" % (recordingTempDirectory, rec.filename))
+            except:
+                print "Tried to remove %s/%s but failed." % (recordingTempDirectory, rec.filename)
         except:
             print "Couldn't find a match, moving on."
             continue
@@ -103,11 +108,11 @@ def main(args):
     recordingData = parseRecordingData(args.temp)
     if(args.authsql):
         matchCalls(authType = "sql", server = args.server, database = args.database, username = args.username,
-            password = args.password, days=args.days, recordings=recordingData, recordingTempDirectory = args.temp,
+            password = args.password, recordings=recordingData, recordingTempDirectory = args.temp,
             destinationDirectory = args.dest)
     else:
         matchCalls(server = args.server, database = args.database, username = args.username, password = args.password,
-            days=args.days, recordings=recordingData, recordingTempDirectory = args.temp, destinationDirectory = args.dest)
+            recordings=recordingData, recordingTempDirectory = args.temp, destinationDirectory = args.dest)
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description="""Pulls call data from
@@ -127,7 +132,6 @@ if __name__ == '__main__':
         help="""Username for SQL Server.""")
     argparser.add_argument('-p', '--password', type=str, required=False,
         help="""Password for SQL Server.""")
-    argparser.add_argument('--days', type=str, required=True, help="""Specify the number of days to go back when matching.""")
 
     args = argparser.parse_args()
 
