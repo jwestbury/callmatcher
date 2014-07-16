@@ -22,8 +22,11 @@ def main(downloadSince = 8, args = None):
 	for file in files:
 		if file.name.endswith(".WAV"):
 			td = parser.parse(file.name[11:28])
-			delta = (today - td).total_seconds()
-			print "Second delta since call is %s." % delta
+			if(args.hours):
+		            delta = (today - td).total_seconds()
+			else:
+			    delta = (today - td).days
+			print "Delta since call is %s." % delta
 			if delta < downloadSince:
 				print "Downloading %s to %s." % (file.name[11:], getcwd())
 				file.get_contents_to_filename(file.name[11:])
