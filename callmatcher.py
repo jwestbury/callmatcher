@@ -18,12 +18,13 @@ class callData:
     filename = None
     callid = None
 
-def parseRecordingData(recordingTempDirectory = None):
+def parseRecordingData(recordingTempDirectory = "\temp"):
     """Parse call data (phone numbers, time, date) from files in specified directory.
 
     Returns an object with call time, phone numbers, and filename."""
-    phonePattern = re.compile(r"[2-9]\d{9}")
-    timePattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}")
+    #phonePattern = re.compile(r"[2-9]\d{9}")
+    #phonePattern = re.compile(r"(~([1-9]\d{2})~([1-9]\d{2})~|([2-9]\d{9})|~([1-9]\d{2})~|(Restricted)|(Unavailable))", re.IGNORECASE)
+    #timePattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}")
     recording_zone = dateutil.tz.gettz('America/Denver')
     utc_zone = dateutil.tz.gettz('UTC')
     recordings = []
@@ -32,14 +33,14 @@ def parseRecordingData(recordingTempDirectory = None):
         for rootdir, dirnames, filenames in os.walk(recordingTempDirectory):
             print "Parsing data on recordings in %s." % rootdir
             for file in filenames:
-                timedate = timePattern.findall(file)
+                c = file.split('~')
                 if timedate:
                  # if we found something in this format, it's pretty safe to guess it's a recording
-                    td = parser.parse(timedate[0])
+                    td = parser.parse(c[0])
                     td = td.replace(tzinfo=recording_zone)
                     td = td.astimezone(tz=utc_zone)
                     try:
-                        s, d = phonePattern.findall(file)
+                        s, d = (c[2], c[3])
                     except:
                         print "Failed to match %s, moving on." % file
                         continue
