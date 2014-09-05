@@ -18,14 +18,12 @@ class callData:
     filename = None
     callid = None
 
-def parseRecordingData(recordingTempDirectory = "\temp"):
+def parseRecordingData(recordingTempDirectory = None):
     """Parse call data (phone numbers, time, date) from files in specified directory.
 
     Returns an object with call time, phone numbers, and filename."""
-    #phonePattern = re.compile(r"[2-9]\d{9}")
-    #phonePattern = re.compile(r"(~([1-9]\d{2})~([1-9]\d{2})~|([2-9]\d{9})|~([1-9]\d{2})~|(Restricted)|(Unavailable))", re.IGNORECASE)
-    #timePattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}")
-    recording_zone = dateutil.tz.gettz('America/Denver')
+    timePattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{6}") # e.g. 2014-07-14T073257
+    recording_zone = dateutil.tz.gettz('America/Denver') # files on server are MT
     utc_zone = dateutil.tz.gettz('UTC')
     recordings = []
 
@@ -33,19 +31,20 @@ def parseRecordingData(recordingTempDirectory = "\temp"):
         for rootdir, dirnames, filenames in os.walk(recordingTempDirectory):
             print "Parsing data on recordings in %s." % rootdir
             for file in filenames:
-                c = file.split('~')
+                data = file.split('~')
+                timedate = timePattern.findall(data[0]) # time should be the first part of our filename
                 if timedate:
                  # if we found something in this format, it's pretty safe to guess it's a recording
-                    td = parser.parse(c[0])
+                    td = parser.parse(timedate[0])
                     td = td.replace(tzinfo=recording_zone)
-                    td = td.astimezone(tz=utc_zone)
+                    td = td.astimezone(tz=utc_zone) # convert MT time to UTC for easier comparisons
                     try:
-                        s, d = (c[2], c[3])
+                        s, d = (data[2], data[3])
                     except:
-                        print "Failed to match %s, moving on." % file
+                        print "Couldn't split %s into the correct number of chunks (at least 4, split on ~), skipping." % file
                         continue
                     recordings.append(callData(sourcenumber=s, destnumber=d, filename=file, time=td))
-                    recordings.sort(key = lambda x: x.time)
+                    recordings.sort(key = lambda x: x.time) # sort the objects in recordings[] by time
                 else:
                     continue # if it didn't match our earlier format, it's not a recording
         return recordings
@@ -65,12 +64,12 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
     if authType == 'windows':
         print "Connecting to %s with Windows auth." % server
         conn = pyodbc.connect(driver="{SQL Server}", server=server, database=database,
-            trusted_connection="yes")
+            trusted_connection="yes") # create our PyODBC connection with Windows auth
     elif authType == 'sql':
         if username and password:
             print "Connecting to %s with username %s and password %s." % (server, username, password)
             conn = pyodbc.connect(driver="{SQL Server}", server=server, database=database,
-                uid=username, password=password)
+                uid=username, password=password) # create our PyODBC connection with user/pass
         else:
             print "When using SQL Server authentication, you must specify a username and password."
             exit(1057)
@@ -82,6 +81,7 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
         callLog = {}
         cursor = conn.cursor()
         print "Selecting records that match '%s' and '%s'" % (rec.sourcenumber, rec.destnumber)
+        # now we need to get all of the calls from our given source number to our given destination
         cursor.execute("SELECT * FROM PhoneLog WHERE CallerNumber=\'%s\' and DialedNumber=\'%s\'" % (rec.sourcenumber, rec.destnumber))
 
         while 1:
@@ -90,15 +90,17 @@ def matchCalls(authType = "windows", server = None, database = None, username = 
                 break
             else:
                 td = parser.parse(row.Time)
-                td = td.replace(tzinfo=dateutil.tz.gettz('UTC'))
+                td = td.replace(tzinfo=dateutil.tz.gettz('UTC')) # tag the call log time as UTC (it's already UTC, no need to convert)
                 callLog[row.CallID] = td
 
         try:
-            matched = min(callLog, key=lambda y:abs((callLog[y]-rec.time).total_seconds()))
+            # call recordings aren't matched to call data by any UID
+            # we'll find the matching recording (same source/destination numbers) with the nearest timestamp to what we've got in our logs
+            matched = min(callLog, key=lambda y:abs((callLog[y]-rec.time).total_seconds())) # get the least difference between logs and recording
             print "Matched call is call ID %s at %s." % (matched, rec.time)
-            copyfile(recordingTempDirectory+"/"+rec.filename, destinationDirectory+"/"+matched+".WAV")
+            copyfile(recordingTempDirectory+"/"+rec.filename, destinationDirectory+"/"+matched+".WAV") # copy to the destination using 
             try:
-                remove("%s/%s" % (recordingTempDirectory, rec.filename))
+                remove("%s/%s" % (recordingTempDirectory, rec.filename)) # once it's copied, remove it from our source dir
             except:
                 print "Tried to remove %s/%s but failed." % (recordingTempDirectory, rec.filename)
         except:

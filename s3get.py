@@ -20,7 +20,9 @@ def main(downloadSince = 8, args = None):
     files = bucket.list()
 
     for file in files:
-        if file.name.endswith(".WAV"):
+        if file.name.endswith(".WAV"): # call recordings are all .WAV files
+            # timedate is in the below characters for a given bucket, but this might change
+            # should probably update this to detect the timedate more universally
             td = parser.parse(file.name[11:28])
             if(args.hours):
                 delta = (today - td).total_seconds()
@@ -28,6 +30,8 @@ def main(downloadSince = 8, args = None):
                 delta = (today - td).days
             print "Delta since call is %s." % delta
             if delta < downloadSince:
+                # like td, the actual filename starts at 11 for a given bucket, but may start
+                # at a different spot in other buckets - update to parse better!
                 print "Downloading %s to %s." % (file.name[11:], getcwd())
                 file.get_contents_to_filename(file.name[11:])
 
