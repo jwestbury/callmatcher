@@ -1,7 +1,8 @@
 import argparse
 import boto
 import dateutil
-from os import chdir,getcwd
+import redis
+from os import chdir,getcwd,path
 from datetime import datetime
 from boto.s3.connection import OrdinaryCallingFormat
 from dateutil import parser
@@ -18,6 +19,13 @@ def main(downloadSince = 8, args = None):
     s3 = boto.connect_s3(calling_format=OrdinaryCallingFormat())
     bucket = s3.get_bucket(args.bucket)
     files = bucket.list()
+    if(args.redisserver):
+        if(args.redispassword):
+            r = redis.Redis(host="%s" % args.redisserver, password="%s" % args.redispassword)
+        else:
+            r = redis.Redis(host="%s" % (args.redisserver))
+    else:
+        r = None
 
     for file in files:
         if file.name.endswith(".WAV"): # call recordings are all .WAV files
@@ -32,8 +40,26 @@ def main(downloadSince = 8, args = None):
             if delta < downloadSince:
                 # like td, the actual filename starts at 11 for a given bucket, but may start
                 # at a different spot in other buckets - update to parse better!
-                print "Downloading %s to %s." % (file.name[11:], getcwd())
-                file.get_contents_to_filename(file.name[11:])
+                filename = file.name[11:] # for reference!
+                # if not os.path.isfile(file.name[11:]): # does the file exist?
+                #     print "Downloading %s to %s." % (file.name[11:], getcwd())
+                #     file.get_contents_to_filename(file.name[11:])
+                if r:
+                    if not r.exists(filename): # does the key exist in redis?
+                        print "Downloading %s to %s." % (filename, getcwd())
+                        try:
+                            file.get_contents_to_filename(filename)
+                            r.set(filename,"%s" % datetime.now())
+                        except:
+                            print "Failed."
+                    else:
+                        print "Skipping %s, already downloaded at %s." % (filename, r.get(filename))
+                else:
+                    if not os.path.isfile(file.name[11:]): # does the file exist?
+                        print "Downloading %s to %s." % (file.name[11:], getcwd())
+                        file.get_contents_to_filename(file.name[11:])
+
+    r.save()
 
 if __name__ == '__main__':
     argparser = argparse.ArgumentParser(description="""Pulls call data from
@@ -47,6 +73,10 @@ if __name__ == '__main__':
         help="""The bucket you wish to download WAV files from.""")
     argparser.add_argument('-p', '--path', type=str, required=True,
         help="""The path files will be downloaded to.""")
+    argparser.add_argument('--redisserver', type=str, required=False,
+        help="""Optional Redis server location, stores data on call downloads to prevent duplicate downloads.""")
+    argparser.add_argument('--redispassword', type=str, required=False,
+        help="""Optional Redis server password, use in combination with --redis-server if your server requires authentication.""")
 
     args = argparser.parse_args()
 
